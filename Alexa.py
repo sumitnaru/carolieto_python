@@ -41,7 +41,7 @@ OAUTH_SCOPE = 'profile postal_code'
 
 
 
-from userdata import signin_to_api, get_user_by_email, get_devices, update_user_by_email, get_user_by_refreshToken, get_userid_by_token, get_user_by_token, putEmailCheckForAuth, matchforAuth
+from userdata import signin_to_api, get_user_by_email, get_devices, update_user_by_email, get_user_by_refreshToken, get_userid_by_token, get_user_by_token, putEmailCheckForAuth, matchforAuth, getDevice
 from alexaResponseClass import alexaReport
 from alexaDiscovery import create_discovery_response
 from triggerDevice import trigger
@@ -435,10 +435,10 @@ def alexa_smart_home():
         # Get the request JSON data sent by Alexa
         alexa_request = request.json
         print("Received Alexa Request:")
-        #print(alexa_request)
         
         if "directive" in alexa_request:
             directive = alexa_request["directive"]
+            print("Directive:", json.dumps(directive))
             
             if "payload" in directive and "scope" in directive["payload"]:
                 token = directive["payload"]["scope"]["token"]
@@ -520,7 +520,7 @@ def alexa_smart_home():
                         #print("Validate:", validate_message(alexa_request, change_report))
     
                         return jsonify(change_report)
-                    except KeyError as e:
+                    except (KeyError, Exception) as e:
                         # Handle missing or incorrect keys in the request
                         error_response = {
                             "event": {
@@ -564,7 +564,7 @@ def alexa_smart_home():
     
                         return jsonify(response_report)
                     
-                    except KeyError as e:
+                    except (KeyError, Exception) as e:
                         # Handle missing or incorrect keys in the request
                         error_response = {
                             "event": {
@@ -611,7 +611,7 @@ def alexa_smart_home():
     
                         return jsonify(response_report)
                     
-                    except KeyError as e:
+                    except (KeyError, Exception) as e:
                         # Handle missing or incorrect keys in the request
                         error_response = {
                             "event": {
@@ -641,21 +641,30 @@ def alexa_smart_home():
                         token = directive['endpoint']['scope']['token']
                         print("token: ", token)
                         
-                        status = directive['payload']['brightness']
+                        payload = directive.get('payload', {})
+                        if 'brightness' in payload:
+                            status = payload['brightness']
+                        elif 'brightnessDelta' in payload:
+                            delta = payload['brightnessDelta']
+                            parts = endpoint_id.split('-')
+                            dev_id = parts[0]
+                            dev_data = getDevice(dev_id)
+                            current_br = dev_data[10] if dev_data and len(dev_data) > 10 else 100
+                            status = max(0, min(100, (current_br or 0) + delta))
+                        else:
+                            status = 100
                         print("status: ", status)
                         
                         trigger(endpoint_id, status, "light-d1", namespace)
                         
                         response_report = alexaReport(correlation_token, token, endpoint_id, "Response")
                         
-                        
                         print("Response:")
                         print(response_report)
-                        #print("Validate:", validate_message(alexa_request, change_report))
     
                         return jsonify(response_report)
                     
-                    except KeyError as e:
+                    except (KeyError, Exception) as e:
                         # Handle missing or incorrect keys in the request
                         error_response = {
                             "event": {
@@ -723,7 +732,7 @@ def alexa_smart_home():
                 
                 elif namespace == 'Alexa.ThermostatController':
                     try:
-                        print("I'm in Color Controller")
+                        print("I'm in Thermostat Controller")
                         endpoint_id = directive['endpoint']['endpointId']
                         print("endpoint_id", endpoint_id)
                         correlation_token = directive['header']['correlationToken']
@@ -731,19 +740,53 @@ def alexa_smart_home():
                         token = directive['endpoint']['scope']['token']
                         print("token", token)
         
-                        status = directive['payload']['targetSetpoint']['value']
-                        print("status: ", status)
-                        
-                        
-                        trigger(endpoint_id, status, "showerSteam-d1", namespace)
-        
+                        directive_name = directive['header']['name']
+                        payload = directive.get('payload', {})
+                        print("directive_name: ", directive_name)
+                        print("payload: ", payload)
+
+                        parts = endpoint_id.split('-')
+                        device_id = parts[0]
+                        component_type = parts[1]
+
+                        if directive_name == 'SetThermostatMode':
+                            mode_val = payload.get('mode', {}).get('value', 'OFF')
+                            power_status = 'TurnOff' if mode_val == 'OFF' else 'TurnOn'
+                            trigger(endpoint_id, power_status, "Shower.d0", "Alexa.PowerController")
+                            response_report = alexaReport(correlation_token, token, endpoint_id, "Response")
+                            return jsonify(response_report)
+                        elif directive_name == 'SetTargetTemperature':
+                            target_obj = payload.get('targetSetpoint', {})
+                            temp_val = float(target_obj.get('value', 38))
+                            scale = target_obj.get('scale', 'CELSIUS')
+                            if str(scale).upper() == 'FAHRENHEIT':
+                                status = round((temp_val - 32) * 5 / 9)
+                            else:
+                                status = round(temp_val)
+                            trigger(endpoint_id, status, "showerSteam-d1", namespace)
+                        elif directive_name == 'AdjustTargetTemperature':
+                            delta_obj = payload.get('targetSetpointDelta', {})
+                            delta_val = float(delta_obj.get('value', 0))
+                            scale = delta_obj.get('scale', 'CELSIUS')
+                            if str(scale).upper() == 'FAHRENHEIT':
+                                delta = delta_val * 5 / 9
+                            else:
+                                delta = delta_val
+                            dev_data = getDevice(device_id)
+                            current_temp = (dev_data[6] if component_type == 'shower' else dev_data[7]) if dev_data else 38
+                            status = round((current_temp or 38) + delta)
+                            trigger(endpoint_id, status, "showerSteam-d1", namespace)
+                        else:
+                            status = 38
+                            trigger(endpoint_id, status, "showerSteam-d1", namespace)
+
                         response_report = alexaReport(correlation_token, token, endpoint_id, "Response")
         
                         print("Response:")
                         print(response_report)
         
                         return jsonify(response_report)
-                    except KeyError as e:
+                    except (KeyError, Exception) as e:
                         # Handle missing or incorrect keys in the request
                         error_response = {
                             "event": {

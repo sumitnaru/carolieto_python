@@ -7,9 +7,14 @@ def trigger(endpoint_id, status, instance, namespace):
     device_id = parts[0]
     component_type = parts[1]
     
+    if component_type in ['sh1', 'sh2', 'sh3', 'sh4', 'sh5', 'sh6']:
+        component_id = component_type[2:]
+        val = 1 if status == 'TurnOn' else 0
+        showerOnOff(device_id, component_id, val)
+        return
+
     component_id = instance[-1]
 
-    
     if component_type == 'shower' and ( namespace == 'Alexa.PowerController' or namespace == 'Alexa.ToggleController'):
         if status == 'TurnOn':
             showerOnOff(device_id, component_id, 1)
@@ -35,28 +40,20 @@ def trigger(endpoint_id, status, instance, namespace):
         setColour(device_id, status)
         
     elif component_type == 'shower' and namespace == 'Alexa.ThermostatController':
-        
-        #isOn = getDeviceStatus(device_id, "ON")
-        #print(f"isOn:{isOn}")
-        
         data = {
             "ShTemp": status
         }
-        
-        #if isOn != 1:
-        #    data = {
-        #        "shTemp": status,
-        #        "sh1": 1
-        #    }
-            
         sendData(device_id, data)
+        query = f"UPDATE tbl_device_status SET ShTemp={status} WHERE deviceid='{device_id}'"
+        updateDeviceStatus(query)
     
     elif component_type == 'steam' and namespace == 'Alexa.ThermostatController':
         data = {
             "STTemp": status
-            #"STTimer" : 1
         }
         sendData(device_id, data)
+        query = f"UPDATE tbl_device_status SET STTemp={status} WHERE deviceid='{device_id}'"
+        updateDeviceStatus(query)
     
 
 

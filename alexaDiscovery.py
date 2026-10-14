@@ -70,7 +70,6 @@ def create_device_data(discovery_response, noofshower, showerNames, device_id, e
                       {
                   "type": "AlexaInterface",
                   "interface": "Alexa.PowerController",
-                  "instance": "Shower.power",
                   "version": "3",
                   "properties": {
                     "supported": [
@@ -108,6 +107,22 @@ def create_device_data(discovery_response, noofshower, showerNames, device_id, e
     for i in range(1, noofshower + 1):
         capability_inst_id = f"Shower.d{i}"
         capability_fName = showerNames[i-1] #f"Shower {str(i)}"
+        names_to_add = [capability_fName]
+        if "shower" not in capability_fName.lower():
+            names_to_add.append(f"{capability_fName} Shower")
+            names_to_add.append(f"Shower {capability_fName}")
+
+        fnames_list = []
+        for name_val in names_to_add:
+            for loc in ["en-US", "en-IN", "hi-IN"]:
+                fnames_list.append({
+                    "@type": "text",
+                    "value": {
+                        "text": name_val,
+                        "locale": loc
+                    }
+                })
+
         capability = {
                   "type": "AlexaInterface",
                   "interface": "Alexa.ToggleController",
@@ -124,29 +139,7 @@ def create_device_data(discovery_response, noofshower, showerNames, device_id, e
                     "nonControllable": False
                   },
                   "capabilityResources": {
-                    "friendlyNames": [
-                      {
-                        "@type": "text",
-                        "value": {
-                          "text": capability_fName,
-                          "locale": "en-US"
-                        }
-                      },
-                      {
-                        "@type": "text",
-                        "value": {
-                          "text": capability_fName,
-                          "locale": "en-IN"
-                        }
-                      },
-                      {
-                        "@type": "text",
-                        "value": {
-                          "text": capability_fName,
-                          "locale": "hi-IN"
-                        }
-                      }
-                    ]
+                    "friendlyNames": fnames_list
                   }
                 }
         
@@ -157,24 +150,96 @@ def create_device_data(discovery_response, noofshower, showerNames, device_id, e
         th_capability = {
             "type": "AlexaInterface",
             "interface": "Alexa.ThermostatController",
-            "instance": "Shower.temp",
             "version": "3",
             "properties": {
                 "supported": [
                     {
                         "name": "targetSetpoint"
+                    },
+                    {
+                        "name": "thermostatMode"
+                    }
+                ],
+                "proactivelyReported": False,
+                "retrievable": True
+            },
+            "configuration": {
+                "supportedModes": [
+                    "OFF",
+                    "HEAT"
+                ]
+            }
+        }
+        main_endpoint["capabilities"].append(th_capability)
+
+        temp_sensor_capability = {
+            "type": "AlexaInterface",
+            "interface": "Alexa.TemperatureSensor",
+            "version": "3",
+            "properties": {
+                "supported": [
+                    {
+                        "name": "temperature"
                     }
                 ],
                 "proactivelyReported": False,
                 "retrievable": True
             }
         }
-        main_endpoint["capabilities"].append(th_capability)
+        main_endpoint["capabilities"].append(temp_sensor_capability)
         
        
     discovery_response["event"]["payload"]["endpoints"].append(main_endpoint)
     
-    
+    for i in range(1, noofshower + 1):
+        flow_name = showerNames[i-1]
+        friendly_flow_name = f"{flow_name} Shower" if "shower" not in flow_name.lower() else flow_name
+        flow_endpoint = {
+            "endpointId": f"{device_id}-sh{i}",
+            "manufacturerName": "Carolieto",
+            "friendlyName": friendly_flow_name,
+            "description": f"Carolieto Smart Shower {flow_name}",
+            "displayCategories": [
+                "SWITCH"
+            ],
+            "cookie": {},
+            "capabilities": [
+                {
+                    "type": "AlexaInterface",
+                    "interface": "Alexa",
+                    "version": "3"
+                },
+                {
+                    "type": "AlexaInterface",
+                    "interface": "Alexa.PowerController",
+                    "version": "3",
+                    "properties": {
+                        "supported": [
+                            {
+                                "name": "powerState"
+                            }
+                        ],
+                        "proactivelyReported": False,
+                        "retrievable": True
+                    }
+                },
+                {
+                    "type": "AlexaInterface",
+                    "interface": "Alexa.EndpointHealth",
+                    "version": "3",
+                    "properties": {
+                        "supported": [
+                            {
+                                "name": "connectivity"
+                            }
+                        ],
+                        "proactivelyReported": True,
+                        "retrievable": True
+                    }
+                }
+            ]
+        }
+        discovery_response["event"]["payload"]["endpoints"].append(flow_endpoint)
     if enable_light:
         st_endpoint = {
           "endpointId": f"{device_id}-colour",
@@ -193,7 +258,6 @@ def create_device_data(discovery_response, noofshower, showerNames, device_id, e
             {
               "type": "AlexaInterface",
               "interface": "Alexa.PowerController",
-              "instance": "Colour.power",
               "version": "3",
               "properties": {
                 "supported": [
@@ -208,7 +272,6 @@ def create_device_data(discovery_response, noofshower, showerNames, device_id, e
             {
               "type": "AlexaInterface",
               "interface": "Alexa.ColorController",
-              "instance": "Colour.color",
               "version": "3",
               "properties": {
                 "supported": [
@@ -223,7 +286,6 @@ def create_device_data(discovery_response, noofshower, showerNames, device_id, e
             {
                 "type": "AlexaInterface",
                 "interface": "Alexa.BrightnessController",
-                "instance": "Colour.bright",
                 "version": "3",
                 "properties": {
                     "supported": [
@@ -272,7 +334,6 @@ def create_device_data(discovery_response, noofshower, showerNames, device_id, e
             {
               "type": "AlexaInterface",
               "interface": "Alexa.PowerController",
-              "instance": "Steam.power",
               "version": "3",
               "properties": {
                 "supported": [
@@ -287,12 +348,34 @@ def create_device_data(discovery_response, noofshower, showerNames, device_id, e
             {
                 "type": "AlexaInterface",
                 "interface": "Alexa.ThermostatController",
-                "instance": "Steam.temp",
                 "version": "3",
                 "properties": {
                     "supported": [
                         {
                             "name": "targetSetpoint"
+                        },
+                        {
+                            "name": "thermostatMode"
+                        }
+                    ],
+                    "proactivelyReported": False,
+                    "retrievable": True
+                },
+                "configuration": {
+                    "supportedModes": [
+                        "OFF",
+                        "HEAT"
+                    ]
+                }
+            },
+            {
+                "type": "AlexaInterface",
+                "interface": "Alexa.TemperatureSensor",
+                "version": "3",
+                "properties": {
+                    "supported": [
+                        {
+                            "name": "temperature"
                         }
                     ],
                     "proactivelyReported": False,
